@@ -1,5 +1,7 @@
 from pyspark.sql import SparkSession
 import logging
+from config import KAFKA_TOPIC, BOOTSTRAP_SERVERS
+
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -16,9 +18,8 @@ spark = SparkSession.builder \
     .getOrCreate()
 
 # Kafka configuration
-kafka_servers = '3.145.153.231:9092'  # Kafka broker address
-# kafka_topic = 'streamAnalysis'
-kafka_topic='demoWithoutPartition'
+kafka_servers = BOOTSTRAP_SERVERS # Kafka broker address
+kafka_topic=KAFKA_TOPIC
 
 # Define input DataFrame using Kafka source
 df = spark \

@@ -2,6 +2,8 @@ import boto3
 from kafka import KafkaProducer
 import json
 import logging
+from config import KAFKA_TOPIC, BOOTSTRAP_SERVERS
+
 
 
 # AWS S3 configuration
@@ -10,8 +12,8 @@ bucket_name = 'game-recommender-steam-tej'
 object_keys = ['games_metadata.json', 'games.csv']
 
 # Kafka configuration
-kafka_servers = ['3.145.153.231:9092']  # Kafka broker address
-kafka_topic = 'demoWithoutPartition'
+kafka_servers = BOOTSTRAP_SERVERS  # Kafka broker address
+kafka_topic = KAFKA_TOPIC
 
 
 # Initialize Kafka producer
