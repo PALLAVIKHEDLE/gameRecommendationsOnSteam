@@ -4,46 +4,39 @@ import json
 import logging
 from config import KAFKA_TOPIC, BOOTSTRAP_SERVERS
 
-# AWS S3 configuration
-bucket_name = 'game-recommender-steam-tej'
-object_keys = ['games_metadata.json', 'games.csv']
 
-# Kafka configuration
-kafka_servers = BOOTSTRAP_SERVERS
-kafka_topic = KAFKA_TOPIC
 
 # Initialize Kafka producer
-producer = KafkaProducer(bootstrap_servers=kafka_servers, value_serializer=lambda x: json.dumps(x).encode('utf-8'))
+producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVERS, 
+                         value_serializer=lambda x: json.dumps(x).encode('utf-8'))
 
 # Initialize AWS S3 client
 s3 = boto3.client('s3')
 
-# Function to read data from S3 and produce it to Kafka topic
-def send_to_kafka(bucket, keys):
+def send_to_kafka(bucket, keys, kafka_topic):
     try:
         for key in keys:
             obj = s3.get_object(Bucket=bucket, Key=key)
             data = obj['Body'].read().decode('utf-8')
             
             if key.endswith('.json'):
-                # Process JSON data line by line
-                lines = data.split('\n')
-                for line in lines:
-                    if line.strip():  # Check if line is not empty
-                        record = json.loads(line)
-                        producer.send(kafka_topic, value=record)  # Send entire JSON record to Kafka
+                # Process JSON data
+                records = [json.loads(line) for line in data.split('\n') if line.strip()]
+                for record in records:
+                    # Send JSON record to partition 0
+                    producer.send(kafka_topic, value=record, partition=0)
             elif key.endswith('.csv'):
                 # Process CSV data
                 lines = data.split('\n')
                 header = lines[0].split(',')
-                logging.debug(f"CSV Header: {header}")
                 for line in lines[1:]:
                     if line.strip():  # Check if line is not empty
                         values = line.split(',')
                         record = dict(zip(header, values))
-                        logging.debug(f"CSV Record: {record}")
-                        producer.send(kafka_topic, value=record)  # Send entire CSV record to Kafka
+                        # Send CSV record to partition 1
+                        producer.send(kafka_topic, value=record, partition=1)
         
+        # Flush producer to ensure all messages are sent
         producer.flush()
         logging.info("All messages sent successfully to Kafka")
     except Exception as e:
@@ -54,5 +47,12 @@ def send_to_kafka(bucket, keys):
 # Setup logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# AWS S3 configuration
+bucket_name = 'game-recommender-steam-tej'
+object_keys = ['games_metadata.json', 'games.csv']
+
+# Kafka configuration
+kafka_topic = KAFKA_TOPIC
+
 # Execute function
-send_to_kafka(bucket_name, object_keys)
+send_to_kafka(bucket_name, object_keys, kafka_topic)
