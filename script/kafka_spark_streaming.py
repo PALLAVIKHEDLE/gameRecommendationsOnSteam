@@ -1,49 +1,69 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col
+from pyspark.sql.types import StructType, StructField, StringType, ArrayType
 from config import KAFKA_TOPIC, BOOTSTRAP_SERVERS
 
 # Define the Kafka topic and bootstrap servers
 KAFKA_TOPIC = KAFKA_TOPIC
 BOOTSTRAP_SERVERS = BOOTSTRAP_SERVERS
 
+# Define the schema for JSON parsing
+json_schema = StructType([
+    StructField("app_id", StringType(), nullable=True),
+    StructField("title", StringType(), nullable=True),
+    StructField("date_release", StringType(), nullable=True),
+    StructField("win", StringType(), nullable=True),
+    StructField("mac", StringType(), nullable=True),
+    StructField("linux", StringType(), nullable=True),
+    StructField("rating", StringType(), nullable=True),
+    StructField("positive_ratio", StringType(), nullable=True),
+    StructField("user_reviews", StringType(), nullable=True),
+    StructField("price_final", StringType(), nullable=True),
+    StructField("price_original", StringType(), nullable=True),
+    StructField("discount", StringType(), nullable=True),
+    StructField("steam_deck", StringType(), nullable=True),
+    StructField("description", StringType(), nullable=True),
+    StructField("tags", ArrayType(StringType()), nullable=True)
+])
+
 # Create a SparkSession
 spark = SparkSession.builder \
     .appName("KafkaSparkStreamingApp") \
     .getOrCreate()
 
-# Define input DataFrame using Kafka source with "earliest" starting offset
-df_earliest = spark \
+# Define input DataFrame using Kafka source with specific partitions
+df = spark \
     .readStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", BOOTSTRAP_SERVERS) \
-    .option("subscribe", KAFKA_TOPIC) \
     .option("startingOffsets", "earliest") \
+    .option("failOnDataLoss", "false") \
+    .option("subscribe", KAFKA_TOPIC) \
     .load()
 
 # Convert the value column from bytes to string
-df_earliest = df_earliest.withColumn("value", df_earliest["value"].cast("string"))
+df = df.withColumn("value", df["value"].cast("string"))
 
-# Define a flexible schema for JSON parsing
-schema = "app_id STRING, title STRING, date_release STRING, win STRING, " \
-         "mac STRING, linux STRING, rating STRING, positive_ratio STRING, " \
-         "user_reviews STRING, price_final FLOAT, price_original FLOAT, " \
-         "discount FLOAT, steam_deck BOOLEAN, description STRING, tags ARRAY<STRING>"
+# Parse JSON data based on the schema
+parsed_df = df.withColumn("jsonData", from_json(col("value"), json_schema)) \
+    .select("jsonData.*") \
+    .filter("jsonData is not null")
 
-# Parse JSON data into columns using the defined schema
-parsed_df_earliest = df_earliest.withColumn("jsonData", from_json(col("value"), schema)) \
-    .select("jsonData.*")
+# Filter data from specific partitions (0 and 1)
+filtered_df = parsed_df.filter((col("partition") == 0) | (col("partition") == 1))
 
 # Print the schema of the DataFrame
-print("Schema of the DataFrame (Earliest):")
-parsed_df_earliest.printSchema()
+print("Schema of the DataFrame:")
+filtered_df.printSchema()
 
-# Display the parsed JSON data continuously in the console
-print("Parsed JSON Data (Earliest):")
-query_earliest = parsed_df_earliest \
+# Display the parsed data continuously in the console
+query = filtered_df \
     .writeStream \
     .format("console") \
     .outputMode("append") \
+    .option("truncate", "false") \
+    .option("numRows", 125) \
     .start()
 
-# Don't call awaitTermination() to keep the streaming query running indefinitely
-query_earliest.awaitTermination()
+# Wait for the stream to finish
+query.awaitTermination()
