@@ -1,73 +1,18 @@
-# from pyspark.sql import SparkSession
-# import logging
-# from config import KAFKA_TOPIC, BOOTSTRAP_SERVERS
-
-# # Set up logging
-# logging.basicConfig(level=logging.INFO)
-# logger = logging.getLogger(__name__)
-
-# # Log the Kafka bootstrap servers configuration
-# logger.info(f"Kafka bootstrap servers: {BOOTSTRAP_SERVERS}")
-
-# # Create SparkSession with custom configurations
-# spark = SparkSession.builder \
-#     .appName("KafkaSparkStreamingApp") \
-#     .config("spark.kafka.bootstrap.servers", BOOTSTRAP_SERVERS) \
-#     .getOrCreate()
-
-# # Check if SparkSession is created
-# if spark:
-#     logger.info("SparkSession created successfully")
-# else:
-#     logger.error("Failed to create SparkSession")
-
-# # Define input DataFrame using Kafka source
-# df = spark \
-#     .readStream \
-#     .format("kafka") \
-#     .option("kafka.bootstrap.servers", BOOTSTRAP_SERVERS) \
-#     .option("subscribe", KAFKA_TOPIC) \
-#     .load()
-
-# # Log Kafka topic
-# logger.info(f"Subscribed to Kafka topic: {KAFKA_TOPIC}")
-
-# # Perform processing and display on console
-# query = df \
-#     .selectExpr("CAST(value AS STRING) AS message") \
-#     .writeStream \
-#     .format("console") \
-#     .outputMode("append") \
-#     .start()
-
-# # Await termination
-# query.awaitTermination()
-
 from pyspark.sql import SparkSession
-import logging
+from pyspark.sql.functions import from_json, col
 from config import KAFKA_TOPIC, BOOTSTRAP_SERVERS
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Define the Kafka topic and bootstrap servers
+KAFKA_TOPIC = KAFKA_TOPIC
+BOOTSTRAP_SERVERS = BOOTSTRAP_SERVERS
 
-# Log the Kafka bootstrap servers configuration
-logger.info(f"Kafka bootstrap servers: {BOOTSTRAP_SERVERS}")
-
-# Create SparkSession with custom configurations
+# Create a SparkSession
 spark = SparkSession.builder \
     .appName("KafkaSparkStreamingApp") \
-    .config("spark.kafka.bootstrap.servers", BOOTSTRAP_SERVERS) \
     .getOrCreate()
 
-# Check if SparkSession is created
-if spark:
-    logger.info("SparkSession created successfully")
-else:
-    logger.error("Failed to create SparkSession")
-
-# Define input DataFrame using Kafka source
-df = spark \
+# Define input DataFrame using Kafka source with "earliest" starting offset
+df_earliest = spark \
     .readStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", BOOTSTRAP_SERVERS) \
@@ -75,16 +20,30 @@ df = spark \
     .option("startingOffsets", "earliest") \
     .load()
 
-# Log Kafka topic
-logger.info(f"Subscribed to Kafka topic: {KAFKA_TOPIC}")
+# Convert the value column from bytes to string
+df_earliest = df_earliest.withColumn("value", df_earliest["value"].cast("string"))
 
-# Perform processing and display on console
-query = df \
-    .selectExpr("CAST(value AS STRING) AS message") \
+# Define a flexible schema for JSON parsing
+schema = "app_id STRING, title STRING, date_release STRING, win STRING, " \
+         "mac STRING, linux STRING, rating STRING, positive_ratio STRING, " \
+         "user_reviews STRING, price_final FLOAT, price_original FLOAT, " \
+         "discount FLOAT, steam_deck BOOLEAN, description STRING, tags ARRAY<STRING>"
+
+# Parse JSON data into columns using the defined schema
+parsed_df_earliest = df_earliest.withColumn("jsonData", from_json(col("value"), schema)) \
+    .select("jsonData.*")
+
+# Print the schema of the DataFrame
+print("Schema of the DataFrame (Earliest):")
+parsed_df_earliest.printSchema()
+
+# Display the parsed JSON data continuously in the console
+print("Parsed JSON Data (Earliest):")
+query_earliest = parsed_df_earliest \
     .writeStream \
     .format("console") \
     .outputMode("append") \
     .start()
 
-# Await termination
-query.awaitTermination()
+# Don't call awaitTermination() to keep the streaming query running indefinitely
+query_earliest.awaitTermination()

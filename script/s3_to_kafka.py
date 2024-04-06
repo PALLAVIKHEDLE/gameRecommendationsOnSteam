@@ -31,16 +31,18 @@ def send_to_kafka(bucket, keys):
                 for line in lines:
                     if line.strip():  # Check if line is not empty
                         record = json.loads(line)
-                        producer.send(kafka_topic, value=record)
+                        producer.send(kafka_topic, value=record)  # Send entire JSON record to Kafka
             elif key.endswith('.csv'):
                 # Process CSV data
                 lines = data.split('\n')
                 header = lines[0].split(',')
+                logging.debug(f"CSV Header: {header}")
                 for line in lines[1:]:
                     if line.strip():  # Check if line is not empty
                         values = line.split(',')
                         record = dict(zip(header, values))
-                        producer.send(kafka_topic, value=record)
+                        logging.debug(f"CSV Record: {record}")
+                        producer.send(kafka_topic, value=record)  # Send entire CSV record to Kafka
         
         producer.flush()
         logging.info("All messages sent successfully to Kafka")
@@ -50,7 +52,7 @@ def send_to_kafka(bucket, keys):
         producer.close()
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Execute function
 send_to_kafka(bucket_name, object_keys)
