@@ -52,12 +52,15 @@ parsed_df = df.withColumn("jsonData", from_json(col("value"), json_schema)) \
 # Filter data from specific partitions (0 and 1)
 filtered_df = parsed_df.filter((col("partition") == 0) | (col("partition") == 1))
 
+# Filter data based on rating (very positive or positive)
+filtered_rating_df = filtered_df.filter((col("rating") == "Very Positive") | (col("rating") == "Positive"))
+
 # Print the schema of the DataFrame
 print("Schema of the DataFrame:")
-filtered_df.printSchema()
+filtered_rating_df.printSchema()
 
 # Display the parsed data continuously in the console
-query = filtered_df \
+query = filtered_rating_df \
     .writeStream \
     .format("console") \
     .outputMode("append") \
