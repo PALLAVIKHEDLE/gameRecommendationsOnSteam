@@ -1,7 +1,7 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col
 from pyspark.sql.types import StructType, StructField, StringType, ArrayType
-from config import KAFKA_TOPIC, BOOTSTRAP_SERVERS
+from config import KAFKA_TOPIC, BOOTSTRAP_SERVERS, Access_key, Secret_key
 
 # Define the Kafka topic and bootstrap servers
 KAFKA_TOPIC = KAFKA_TOPIC
@@ -29,8 +29,14 @@ json_schema = StructType([
 # Create a SparkSession
 spark = SparkSession.builder \
     .appName("KafkaSparkStreamingApp") \
+    .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
+    .config("spark.hadoop.fs.s3a.access.key", Access_key) \
+    .config("spark.hadoop.fs.s3a.secret.key", Secret_key) \
+    .config("spark.hadoop.fs.s3a.endpoint", "s3.amazonaws.com") \
+    .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "true") \
     .getOrCreate()
 
+#  .config("spark.hadoop.fs.s3a.endpoint", "s3.us-east-2.amazonaws.com") \
 # Define input DataFrame using Kafka source with specific partitions
 df = spark \
     .readStream \
@@ -52,21 +58,36 @@ parsed_df = df.withColumn("jsonData", from_json(col("value"), json_schema)) \
 # Filter data from specific partitions (0 and 1)
 filtered_df = parsed_df.filter((col("partition") == 0) | (col("partition") == 1))
 
-# Filter data based on rating (very positive or positive)
+# Filter data based on rating (Very Positive or Positive)
 filtered_rating_df = filtered_df.filter((col("rating") == "Very Positive") | (col("rating") == "Positive"))
 
 # Print the schema of the DataFrame
 print("Schema of the DataFrame:")
 filtered_rating_df.printSchema()
 
-# Display the parsed data continuously in the console
+# # Display the parsed data continuously in the console
+# query = filtered_rating_df \
+#     .writeStream \
+#     .format("console") \
+#     .outputMode("append") \
+#     .option("truncate", "false") \
+#     .option("numRows", 125) \
+#     .start()
+
+# # Wait for the stream to finish
+# query.awaitTermination()
+
+
+# Write filtered data to S3 bucket in Parquet format
 query = filtered_rating_df \
     .writeStream \
-    .format("console") \
+    .format("parquet") \
     .outputMode("append") \
-    .option("truncate", "false") \
-    .option("numRows", 125) \
+    .option("path", "s3a://game-recommender-steam-tej/output/") \
+    .option("checkpointLocation", "s3a://game-recommender-steam-tej/checkpoint/") \
     .start()
 
 # Wait for the stream to finish
 query.awaitTermination()
+
+
