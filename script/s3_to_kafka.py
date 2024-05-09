@@ -4,12 +4,9 @@ import json
 import logging
 from config import KAFKA_TOPIC, BOOTSTRAP_SERVERS
 
-
-
 # Initialize Kafka producer
 producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVERS, 
                          value_serializer=lambda x: json.dumps(x).encode('utf-8'))
-
 # Initialize AWS S3 client
 s3 = boto3.client('s3')
 
@@ -49,7 +46,7 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %
 
 # AWS S3 configuration
 bucket_name = 'game-recommender-steam-tej'
-object_keys = ['games_metadata.json', 'games.csv']
+object_keys = ['games_metadata.json', 'games.csv', 'recommendations.csv', 'user.csv']
 
 # Kafka configuration
 kafka_topic = KAFKA_TOPIC
