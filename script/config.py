@@ -1,7 +1,7 @@
 # config.py
 
 # Kafka bootstrap servers
-BOOTSTRAP_SERVERS = '3.145.153.231:9092'
+BOOTSTRAP_SERVERS = 'server'
 
 # Kafka topic
 # KAFKA_TOPIC = 'streamAnalysis'
